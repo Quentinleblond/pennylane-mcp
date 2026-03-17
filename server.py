@@ -56,9 +56,7 @@ async def list_tools() -> list[types.Tool]:
             name="get_income_statement",
             description=(
                 "Compte de résultat PennyLane (P&L) sur une période. "
-                "Retourne produits, charges et résultat par compte PCG. "
-                "Inclut toutes les lignes : ventes véhicules (707), achats (607), "
-                "frais de gestion Mecanicus (622), intérêts Caption (661), etc."
+                "Retourne produits, charges et résultat par compte PCG."
             ),
             inputSchema={
                 "type": "object",
@@ -82,10 +80,7 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_trial_balance",
-            description=(
-                "Balance des comptes (grand livre agrégé) — solde de chaque compte PCG "
-                "sur une période. Utile pour voir les 707, 607, 603, 661, 622, 47x, etc."
-            ),
+            description="Balance des comptes sur une période.",
             inputSchema={
                 "type": "object",
                 "properties": {**COMPANY_PARAM,
@@ -97,76 +92,75 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_journal_entries",
-            description=(
-                "Écritures comptables (journal) sur une période. "
-                "Filtrable par compte PCG (ex: '707' pour ventes, '607' pour achats, "
-                "'661' pour intérêts Caption, '622' pour frais Mecanicus). "
-                "Retourne toutes les lignes d'écriture avec date, libellé, débit/crédit."
-            ),
+            description="Écritures comptables sur une période, filtrables par compte PCG.",
             inputSchema={
                 "type": "object",
                 "properties": {**COMPANY_PARAM,
-                    "date_from":      {"type": "string", "description": "Date début YYYY-MM-DD"},
-                    "date_to":        {"type": "string", "description": "Date fin YYYY-MM-DD"},
+                    "date_from":      {"type": "string", "description": "Date début YYYY-MM-DD (optionnel)"},
+                    "date_to":        {"type": "string", "description": "Date fin YYYY-MM-DD (optionnel)"},
                     "account_number": {"type": "string", "description": "Filtre compte PCG (optionnel, ex: '707')"},
                 },
-                "required": ["company", "date_from", "date_to"],
+                "required": ["company"],
             },
         ),
         types.Tool(
             name="get_invoices",
             description=(
-                "Factures clients (ventes) PennyLane sur une période. "
-                "Inclut montant HT/TTC, date, statut paiement, client. "
-                "Utile pour réconcilier le CA avec Airtable (cut-off)."
+                "Factures clients (ventes) PennyLane. "
+                "Inclut montant HT/TTC, date, statut paiement, client."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {**COMPANY_PARAM,
-                    "date_from": {"type": "string", "description": "Date début YYYY-MM-DD"},
-                    "date_to":   {"type": "string", "description": "Date fin YYYY-MM-DD"},
+                    "date_from": {"type": "string", "description": "Date début YYYY-MM-DD (optionnel)"},
+                    "date_to":   {"type": "string", "description": "Date fin YYYY-MM-DD (optionnel)"},
                     "status":    {"type": "string", "description": "Statut : 'paid', 'unpaid', 'draft' (optionnel)"},
                 },
-                "required": ["company", "date_from", "date_to"],
+                "required": ["company"],
             },
         ),
         types.Tool(
             name="get_supplier_invoices",
-            description=(
-                "Factures fournisseurs (achats) PennyLane sur une période. "
-                "Inclut achats véhicules, frais de gestion Mecanicus (FAC000xxx), "
-                "coupons Caption, frais d'immatriculation, entretiens."
-            ),
+            description="Factures fournisseurs (achats) PennyLane.",
             inputSchema={
                 "type": "object",
                 "properties": {**COMPANY_PARAM,
-                    "date_from": {"type": "string", "description": "Date début YYYY-MM-DD"},
-                    "date_to":   {"type": "string", "description": "Date fin YYYY-MM-DD"},
+                    "date_from": {"type": "string", "description": "Date début YYYY-MM-DD (optionnel)"},
+                    "date_to":   {"type": "string", "description": "Date fin YYYY-MM-DD (optionnel)"},
                 },
-                "required": ["company", "date_from", "date_to"],
+                "required": ["company"],
             },
         ),
         types.Tool(
             name="get_bank_transactions",
             description=(
                 "Transactions bancaires importées dans PennyLane — "
-                "toutes les banques connectées : Qonto, MemoBank, Caisse d'Épargne, SG. "
-                "Retourne chaque mouvement avec date, libellé, montant, banque. "
-                "C'est la source pour le P&L 2026 en temps réel."
+                "Qonto, MemoBank, Caisse d'Épargne, SG."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {**COMPANY_PARAM,
-                    "date_from":  {"type": "string", "description": "Date début YYYY-MM-DD"},
-                    "date_to":    {"type": "string", "description": "Date fin YYYY-MM-DD"},
-                    "account_id": {"type": "string", "description": "ID compte bancaire pour filtrer (optionnel)"},
+                    "date_from":  {"type": "string", "description": "Date début YYYY-MM-DD (optionnel)"},
+                    "date_to":    {"type": "string", "description": "Date fin YYYY-MM-DD (optionnel)"},
+                    "account_id": {"type": "string", "description": "ID compte bancaire (optionnel)"},
                 },
-                "required": ["company", "date_from", "date_to"],
+                "required": ["company"],
+            },
+        ),
+        types.Tool(
+            name="debug_raw",
+            description="Retourne la réponse brute de PennyLane pour diagnostiquer les endpoints.",
+            inputSchema={
+                "type": "object",
+                "properties": {**COMPANY_PARAM,
+                    "endpoint": {"type": "string", "description": "Endpoint ex: /customer_invoices, /transactions"},
+                },
+                "required": ["company", "endpoint"],
             },
         ),
         types.Tool(
             name="get_company_info",
-            description="Info société + liste des comptes bancaires connectés à PennyLane.",
+            description="Info société + comptes bancaires connectés à PennyLane.",
             inputSchema={
                 "type": "object",
                 "properties": COMPANY_PARAM,
@@ -229,10 +223,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                 date_to=arguments.get("date_to"),
                 account_id=arguments.get("account_id"),
             )
-            credits = sum(float(t.get("amount", 0)) for t in txns
-                          if float(t.get("amount", 0)) > 0)
-            debits  = sum(abs(float(t.get("amount", 0))) for t in txns
-                          if float(t.get("amount", 0)) < 0)
+            credits = sum(float(t.get("amount", 0)) for t in txns if float(t.get("amount", 0)) > 0)
+            debits  = sum(abs(float(t.get("amount", 0))) for t in txns if float(t.get("amount", 0)) < 0)
             return fmt({"company": company, "count": len(txns),
                         "total_credits": round(credits, 2),
                         "total_debits":  round(debits, 2),
@@ -240,8 +232,17 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                         "transactions": txns})
 
         elif name == "get_company_info":
-            data = await client.get_company()
-            return fmt({"company": company, **data})
+            try:
+                data = await client.get_company()
+                return fmt({"company": company, **data})
+            except Exception:
+                data = await client._get("/customer_invoices", [("page", 1), ("per_page", 1)])
+                return fmt({"company": company, "token_valid": True, "raw_sample": data})
+
+        elif name == "debug_raw":
+            endpoint = arguments.get("endpoint", "/customer_invoices")
+            data = await client._get(endpoint, [("page", 1), ("per_page", 5)])
+            return fmt({"company": company, "endpoint": endpoint, "raw": data})
 
         else:
             return fmt({"error": f"Outil inconnu: {name}"})
@@ -252,7 +253,6 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
 # ── Entry points ───────────────────────────────────────────────────────────
 def run_sse():
-    """HTTP/SSE server — utilisé par Railway (défaut)."""
     from starlette.applications import Starlette
     from starlette.routing import Mount, Route
     from mcp.server.sse import SseServerTransport
@@ -265,10 +265,8 @@ def run_sse():
         async with sse.connect_sse(
             request.scope, request.receive, request._send
         ) as streams:
-            await server.run(
-                streams[0], streams[1],
-                server.create_initialization_options()
-            )
+            await server.run(streams[0], streams[1],
+                             server.create_initialization_options())
 
     starlette_app = Starlette(
         routes=[
@@ -276,24 +274,20 @@ def run_sse():
             Mount("/messages/", app=sse.handle_post_message),
         ]
     )
-
     uvicorn.run(starlette_app, host="0.0.0.0", port=port)
 
 
 def run_stdio():
-    """Stdio server — pour usage local (MCP client desktop)."""
     from mcp.server.stdio import stdio_server
 
     async def _main():
         async with stdio_server() as (read_stream, write_stream):
             await server.run(read_stream, write_stream,
                              server.create_initialization_options())
-
     asyncio.run(_main())
 
 
 def run():
-    """Point d'entrée principal : SSE si Railway, stdio si --stdio."""
     if "--stdio" in sys.argv:
         run_stdio()
     else:
