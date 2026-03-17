@@ -64,7 +64,7 @@ class PennyLaneClient:
         results, page = [], 1
         while True:
             data = await self.get_invoices(date_from=date_from, date_to=date_to, page=page)
-            items = data.get("invoices", data.get("customer_invoices", data.get("data", [])))
+            items = data.get("items", data.get("invoices", data.get("data", [])))
             results.extend(items)
             meta = data.get("meta", data.get("pagination", {}))
             total_pages = meta.get("total_pages", meta.get("last_page", 1))
@@ -93,7 +93,7 @@ class PennyLaneClient:
         results, page = [], 1
         while True:
             data = await self.get_supplier_invoices(date_from=date_from, date_to=date_to, page=page)
-            items = data.get("invoices", data.get("supplier_invoices", data.get("data", [])))
+            items = data.get("items", data.get("invoices", data.get("data", [])))
             results.extend(items)
             meta = data.get("meta", data.get("pagination", {}))
             total_pages = meta.get("total_pages", meta.get("last_page", 1))
@@ -133,7 +133,7 @@ class PennyLaneClient:
                 date_from=date_from, date_to=date_to,
                 account_number=account_number, page=page
             )
-            items = data.get("accounting_entries", data.get("data", []))
+            items = data.get("items", data.get("accounting_entries", data.get("data", [])))
             results.extend(items)
             meta = data.get("meta", data.get("pagination", {}))
             total_pages = meta.get("total_pages", meta.get("last_page", 1))
@@ -173,7 +173,7 @@ class PennyLaneClient:
                 date_from=date_from, date_to=date_to,
                 account_id=account_id, page=page
             )
-            items = data.get("transactions", data.get("data", []))
+            items = data.get("items", data.get("transactions", data.get("data", [])))
             results.extend(items)
             meta = data.get("meta", data.get("pagination", {}))
             total_pages = meta.get("total_pages", meta.get("last_page", 1))
@@ -200,3 +200,7 @@ class PennyLaneClient:
             _f("end_date", "eq", date_to),
         )
         return await self._get("/trial_balance", params)
+
+    async def get_company(self) -> dict:
+        data = await self._get("/customer_invoices", [("page", 1), ("per_page", 1)])
+        return {"token_valid": True, "sample": data.get("items", [])[:1]}
