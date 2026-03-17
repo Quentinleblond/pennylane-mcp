@@ -1,9 +1,9 @@
-"""PennyLane API client — wraps https://app.pennylane.com/api/external/v1/"""
+"""PennyLane API client — wraps https://app.pennylane.com/api/external/v2/"""
 
 import httpx
 from typing import Any
 
-PENNYLANE_BASE = "https://app.pennylane.com/api/external/v1"
+PENNYLANE_BASE = "https://app.pennylane.com/api/external/v2"
 
 
 class PennyLaneClient:
