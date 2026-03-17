@@ -7,9 +7,16 @@ from typing import Any
 PENNYLANE_BASE = "https://app.pennylane.com/api/external/v2"
 
 
-def _f(field: str, operator: str, value: str) -> tuple:
-    """Build a single v2 filter tuple for httpx params."""
-    return ("filters[]", json.dumps({"field": field, "operator": operator, "value": value}))
+def _filters(*conditions: dict) -> list[tuple]:
+    """Build v2 filters param: filters=[{...},{...}] as a single JSON array."""
+    if not conditions:
+        return []
+    return [("filters", json.dumps(list(conditions)))]
+
+
+def _f(field: str, operator: str, value: str) -> dict:
+    """Build a single filter condition dict."""
+    return {"field": field, "operator": operator, "value": value}
 
 
 class PennyLaneClient:
@@ -43,13 +50,14 @@ class PennyLaneClient:
         page: int = 1,
         per_page: int = 100,
     ) -> dict:
-        params = [("page", page), ("per_page", per_page)]
+        conditions = []
         if date_from:
-            params.append(_f("date", "gteq", date_from))
+            conditions.append(_f("date", "gteq", date_from))
         if date_to:
-            params.append(_f("date", "lteq", date_to))
+            conditions.append(_f("date", "lteq", date_to))
         if status:
-            params.append(_f("status", "eq", status))
+            conditions.append(_f("status", "eq", status))
+        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
         return await self._get("/customer_invoices", params)
 
     async def get_all_invoices(self, date_from: str | None = None, date_to: str | None = None) -> list:
@@ -73,11 +81,12 @@ class PennyLaneClient:
         page: int = 1,
         per_page: int = 100,
     ) -> dict:
-        params = [("page", page), ("per_page", per_page)]
+        conditions = []
         if date_from:
-            params.append(_f("date", "gteq", date_from))
+            conditions.append(_f("date", "gteq", date_from))
         if date_to:
-            params.append(_f("date", "lteq", date_to))
+            conditions.append(_f("date", "lteq", date_to))
+        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
         return await self._get("/supplier_invoices", params)
 
     async def get_all_supplier_invoices(self, date_from: str | None = None, date_to: str | None = None) -> list:
@@ -102,13 +111,14 @@ class PennyLaneClient:
         page: int = 1,
         per_page: int = 200,
     ) -> dict:
-        params = [("page", page), ("per_page", per_page)]
+        conditions = []
         if date_from:
-            params.append(_f("date", "gteq", date_from))
+            conditions.append(_f("date", "gteq", date_from))
         if date_to:
-            params.append(_f("date", "lteq", date_to))
+            conditions.append(_f("date", "lteq", date_to))
         if account_number:
-            params.append(_f("account_number", "eq", account_number))
+            conditions.append(_f("account_number", "eq", account_number))
+        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
         return await self._get("/accounting_entries", params)
 
     async def get_all_journal_entries(
@@ -133,7 +143,6 @@ class PennyLaneClient:
         return results
 
     # ── Bank transactions ─────────────────────────────────────────────────
-    # v2: endpoint is /transactions (not /bank_transactions)
     async def get_bank_transactions(
         self,
         date_from: str | None = None,
@@ -142,13 +151,14 @@ class PennyLaneClient:
         page: int = 1,
         per_page: int = 200,
     ) -> dict:
-        params = [("page", page), ("per_page", per_page)]
+        conditions = []
         if date_from:
-            params.append(_f("date", "gteq", date_from))
+            conditions.append(_f("date", "gteq", date_from))
         if date_to:
-            params.append(_f("date", "lteq", date_to))
+            conditions.append(_f("date", "lteq", date_to))
         if account_id:
-            params.append(_f("bank_account_id", "eq", account_id))
+            conditions.append(_f("bank_account_id", "eq", account_id))
+        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
         return await self._get("/transactions", params)
 
     async def get_all_bank_transactions(
@@ -176,21 +186,17 @@ class PennyLaneClient:
     async def get_income_statement(
         self, date_from: str, date_to: str, compare: bool = False
     ) -> dict:
-        params = {
-            "filter[start_date]": date_from,
-            "filter[end_date]": date_to,
-        }
-        if compare:
-            params["compare"] = "true"
-        return await self._get("/income_statement", params)
+        return await self.get_trial_balance(date_from, date_to)
 
     async def get_balance_sheet(self, date: str) -> dict:
-        return await self._get("/balance_sheet", {"filter[date]": date})
+        params = _filters(_f("date", "lteq", date))
+        return await self._get("/balance_sheet", params)
 
     async def get_trial_balance(
         self, date_from: str, date_to: str
     ) -> dict:
-        return await self._get("/trial_balance", {
-            "filter[start_date]": date_from,
-            "filter[end_date]": date_to,
-        })
+        params = _filters(
+            _f("start_date", "eq", date_from),
+            _f("end_date", "eq", date_to),
+        )
+        return await self._get("/trial_balance", params)
