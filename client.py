@@ -41,14 +41,39 @@ class PennyLaneClient:
     async def close(self):
         await self._client.aclose()
 
+    def _extract_items(self, data: dict, *keys: str) -> list:
+        """Extract items from response, checking 'items' first, then fallback keys."""
+        for key in ("items",) + keys:
+            if key in data and isinstance(data[key], list):
+                return data[key]
+        return []
+
+    async def _get_all_cursor(self, path: str, base_params: list, *item_keys: str) -> list:
+        """Paginate through all pages using cursor-based pagination."""
+        results = []
+        cursor = None
+        while True:
+            params = list(base_params)
+            if cursor:
+                params.append(("cursor", cursor))
+            data = await self._get(path, params)
+            items = self._extract_items(data, *item_keys)
+            results.extend(items)
+            if not data.get("has_more", False):
+                break
+            cursor = data.get("next_cursor")
+            if not cursor:
+                break
+        return results
+
     # ── Invoices (ventes) ────────────────────────────────────────────────
     async def get_invoices(
         self,
         date_from: str | None = None,
         date_to: str | None = None,
         status: str | None = None,
-        page: int = 1,
         per_page: int = 100,
+        cursor: str | None = None,
     ) -> dict:
         conditions = []
         if date_from:
@@ -57,50 +82,62 @@ class PennyLaneClient:
             conditions.append(_f("date", "lteq", date_to))
         if status:
             conditions.append(_f("status", "eq", status))
-        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
+        params = [("per_page", per_page)]
+        if cursor:
+            params.append(("cursor", cursor))
+        params += _filters(*conditions)
         return await self._get("/customer_invoices", params)
 
     async def get_all_invoices(self, date_from: str | None = None, date_to: str | None = None) -> list:
-        results, page = [], 1
-        while True:
-            data = await self.get_invoices(date_from=date_from, date_to=date_to, page=page)
-            items = data.get("items", data.get("invoices", data.get("data", [])))
-            results.extend(items)
-            meta = data.get("meta", data.get("pagination", {}))
-            total_pages = meta.get("total_pages", meta.get("last_page", 1))
-            if page >= total_pages:
-                break
-            page += 1
-        return results
+        conditions = []
+        if date_from:
+            conditions.append(_f("date", "gteq", date_from))
+        if date_to:
+            conditions.append(_f("date", "lteq", date_to))
+        base_params = [("per_page", 100)] + _filters(*conditions)
+        return await self._get_all_cursor("/customer_invoices", base_params, "invoices", "customer_invoices", "data")
 
     # ── Supplier invoices (achats) ────────────────────────────────────────
     async def get_supplier_invoices(
         self,
         date_from: str | None = None,
         date_to: str | None = None,
-        page: int = 1,
         per_page: int = 100,
+        cursor: str | None = None,
     ) -> dict:
         conditions = []
         if date_from:
             conditions.append(_f("date", "gteq", date_from))
         if date_to:
             conditions.append(_f("date", "lteq", date_to))
-        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
+        params = [("per_page", per_page)]
+        if cursor:
+            params.append(("cursor", cursor))
+        params += _filters(*conditions)
         return await self._get("/supplier_invoices", params)
 
     async def get_all_supplier_invoices(self, date_from: str | None = None, date_to: str | None = None) -> list:
-        results, page = [], 1
-        while True:
-            data = await self.get_supplier_invoices(date_from=date_from, date_to=date_to, page=page)
-            items = data.get("items", data.get("invoices", data.get("data", [])))
-            results.extend(items)
-            meta = data.get("meta", data.get("pagination", {}))
-            total_pages = meta.get("total_pages", meta.get("last_page", 1))
-            if page >= total_pages:
-                break
-            page += 1
-        return results
+        conditions = []
+        if date_from:
+            conditions.append(_f("date", "gteq", date_from))
+        if date_to:
+            conditions.append(_f("date", "lteq", date_to))
+        base_params = [("per_page", 100)] + _filters(*conditions)
+        all_items = await self._get_all_cursor("/supplier_invoices", base_params, "invoices", "supplier_invoices", "data")
+        # Client-side date filter since server-side filter may not work
+        if date_from or date_to:
+            filtered = []
+            for item in all_items:
+                d = item.get("date")
+                if d is None:
+                    continue
+                if date_from and d < date_from:
+                    continue
+                if date_to and d > date_to:
+                    continue
+                filtered.append(item)
+            return filtered
+        return all_items
 
     # ── Journal entries / grand livre ────────────────────────────────────
     async def get_journal_entries(
@@ -108,8 +145,8 @@ class PennyLaneClient:
         date_from: str | None = None,
         date_to: str | None = None,
         account_number: str | None = None,
-        page: int = 1,
         per_page: int = 200,
+        cursor: str | None = None,
     ) -> dict:
         conditions = []
         if date_from:
@@ -118,7 +155,10 @@ class PennyLaneClient:
             conditions.append(_f("date", "lteq", date_to))
         if account_number:
             conditions.append(_f("account_number", "eq", account_number))
-        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
+        params = [("per_page", per_page)]
+        if cursor:
+            params.append(("cursor", cursor))
+        params += _filters(*conditions)
         return await self._get("/accounting_entries", params)
 
     async def get_all_journal_entries(
@@ -127,20 +167,15 @@ class PennyLaneClient:
         date_to: str | None = None,
         account_number: str | None = None,
     ) -> list:
-        results, page = [], 1
-        while True:
-            data = await self.get_journal_entries(
-                date_from=date_from, date_to=date_to,
-                account_number=account_number, page=page
-            )
-            items = data.get("items", data.get("accounting_entries", data.get("data", [])))
-            results.extend(items)
-            meta = data.get("meta", data.get("pagination", {}))
-            total_pages = meta.get("total_pages", meta.get("last_page", 1))
-            if page >= total_pages:
-                break
-            page += 1
-        return results
+        conditions = []
+        if date_from:
+            conditions.append(_f("date", "gteq", date_from))
+        if date_to:
+            conditions.append(_f("date", "lteq", date_to))
+        if account_number:
+            conditions.append(_f("account_number", "eq", account_number))
+        base_params = [("per_page", 200)] + _filters(*conditions)
+        return await self._get_all_cursor("/accounting_entries", base_params, "accounting_entries", "data")
 
     # ── Bank transactions ─────────────────────────────────────────────────
     async def get_bank_transactions(
@@ -148,8 +183,8 @@ class PennyLaneClient:
         date_from: str | None = None,
         date_to: str | None = None,
         account_id: str | None = None,
-        page: int = 1,
         per_page: int = 200,
+        cursor: str | None = None,
     ) -> dict:
         conditions = []
         if date_from:
@@ -158,7 +193,10 @@ class PennyLaneClient:
             conditions.append(_f("date", "lteq", date_to))
         if account_id:
             conditions.append(_f("bank_account_id", "eq", account_id))
-        params = [("page", page), ("per_page", per_page)] + _filters(*conditions)
+        params = [("per_page", per_page)]
+        if cursor:
+            params.append(("cursor", cursor))
+        params += _filters(*conditions)
         return await self._get("/transactions", params)
 
     async def get_all_bank_transactions(
@@ -167,25 +205,35 @@ class PennyLaneClient:
         date_to: str | None = None,
         account_id: str | None = None,
     ) -> list:
-        results, page = [], 1
-        while True:
-            data = await self.get_bank_transactions(
-                date_from=date_from, date_to=date_to,
-                account_id=account_id, page=page
-            )
-            items = data.get("items", data.get("transactions", data.get("data", [])))
-            results.extend(items)
-            meta = data.get("meta", data.get("pagination", {}))
-            total_pages = meta.get("total_pages", meta.get("last_page", 1))
-            if page >= total_pages:
-                break
-            page += 1
-        return results
+        conditions = []
+        if date_from:
+            conditions.append(_f("date", "gteq", date_from))
+        if date_to:
+            conditions.append(_f("date", "lteq", date_to))
+        if account_id:
+            conditions.append(_f("bank_account_id", "eq", account_id))
+        base_params = [("per_page", 200)] + _filters(*conditions)
+        all_items = await self._get_all_cursor("/transactions", base_params, "transactions", "data")
+        # Client-side date filter
+        if date_from or date_to:
+            filtered = []
+            for item in all_items:
+                d = item.get("date")
+                if d is None:
+                    continue
+                if date_from and d < date_from:
+                    continue
+                if date_to and d > date_to:
+                    continue
+                filtered.append(item)
+            return filtered
+        return all_items
 
     # ── P&L / Balance sheet / Trial balance ──────────────────────────────
     async def get_income_statement(
         self, date_from: str, date_to: str, compare: bool = False
     ) -> dict:
+        # v2: income_statement endpoint removed — use trial_balance instead
         return await self.get_trial_balance(date_from, date_to)
 
     async def get_balance_sheet(self, date: str) -> dict:
@@ -202,5 +250,5 @@ class PennyLaneClient:
         return await self._get("/trial_balance", params)
 
     async def get_company(self) -> dict:
-        data = await self._get("/customer_invoices", [("page", 1), ("per_page", 1)])
-        return {"token_valid": True, "sample": data.get("items", [])[:1]}
+        data = await self._get("/customer_invoices", [("per_page", 1)])
+        return {"token_valid": True, "sample": self._extract_items(data)[:1]}
